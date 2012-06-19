@@ -1,0 +1,26 @@
+[default]
+
+# Gmail username
+username = your_user_name@gmail.com
+
+# Gmail password
+password = your_gmail_password
+
+# Command executed on receipt of new email, e.g. to play a sound.
+# Can be commented out to disable sound.
+command = /usr/bin/aplay /usr/share/sounds/purple/receive.wav
+
+# Following gives volume control, better sounds etc. But needs sox
+# installed.
+#command = /usr/bin/play -v3 /usr/share/sounds/KDE-Im-New-Mail.ogg
+
+# Optional imap server, defaults to gmail but can try other servers that
+# support IMAP idle.
+#server = imap.gmail.com
+
+# Optional folder, defaults to "INBOX"
+#folder = INBOX
+#folder = [Gmail]/Important
+
+# Optional web mail page to open, defaults to gmail default web page
+#webmail = http://mail.google.com/

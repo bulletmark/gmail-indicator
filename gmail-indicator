@@ -1,0 +1,395 @@
+#!/usr/bin/env python
+'''
+Program which monitors gmail inbox to output notification messages and set
+panel indicator icon on new mail.
+'''
+
+# (C) Mark Blakeney, markb@berlios.de, May 2012.
+
+# Standard python modules
+import os, sys, argparse, re, ConfigParser, threading, datetime
+import time, subprocess, webbrowser, fcntl, getpass, traceback
+from email import utils, header
+
+# Debian/Ubuntu packaged 3rd party
+import gtk, gobject, pynotify
+
+# External 3rd party (PyPi)
+# Install with "pip install module"
+from imapclient import IMAPClient
+
+SERVER = 'imap.gmail.com'
+FOLDER = 'INBOX'
+WEBMAIL = 'http://mail.google.com/'
+
+TIMEFMT = '%Y-%m-%d %H:%M.%S'
+
+# Poll rates in secs. Note we use IMAP IDLE so most new emails are
+# "pushed" from server. These times are for failure/integrity polling.
+POLL_FAIL = 30
+POLL_FAST = 60
+POLL_SLOW = 300
+POLL_RECONNECT = 1800
+
+# User and home dir etc
+USER = getpass.getuser()
+HOMEDIR = os.path.expanduser('~')
+DISPLAY = os.getenv('DISPLAY', 'unknown')
+PROGNAME = os.path.basename(sys.argv[0])
+
+def out(text):
+    'Debug logger'
+    if args.debug:
+
+        # Create lock for thread multiplexing output of log messages
+        if not out.lock:
+            out.lock = threading.Lock()
+
+        with out.lock:
+            now = datetime.datetime.now().strftime(TIMEFMT)
+            print now, text
+
+# Global thread lock for out()
+out.lock = None
+
+def open_sys_lock(name):
+    'Create a system wide program lock'
+
+    # We use exclusive assess to a file for this
+    fp = open(os.path.join('/tmp', name + '.lock'), 'w')
+    try:
+        fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        return None
+
+    return fp
+
+class conf:
+    'Small wrapper to manage conf file'
+
+    # Name of section in our ~/.conf file
+    SECTION = 'default'
+
+    inited = False
+    parser = None
+
+    @staticmethod
+    def _init():
+        'Internal function to init conf file'
+        conf.inited = True
+        conf.configfile = os.path.join(HOMEDIR, '.' +
+                os.path.basename(sys.argv[0] + '-rc'))
+
+        if not os.path.exists(conf.configfile):
+            print 'Config file "%s" does not exist.' % conf.configfile
+        else:
+            parser = ConfigParser.SafeConfigParser()
+            parser.read(conf.configfile)
+
+            if not parser.has_section(conf.SECTION):
+                print 'Config file "%s" does not have "[%s]" section.' % \
+                        (conf.configfile, conf.SECTION)
+            else:
+                conf.parser = parser
+
+    @staticmethod
+    def _getopt(option):
+        'Internal function to return conf value'
+        if not conf.inited:
+            conf._init()
+
+        if conf.parser and conf.parser.has_option(conf.SECTION, option):
+            return conf.parser.get(conf.SECTION, option).strip()
+
+        return None
+
+    @staticmethod
+    def get(option, default=None):
+        'Test and return specified option from config file'
+        val = conf._getopt(option)
+
+        if val is not None:
+            return val
+
+        if default is not None:
+            return default
+
+        # No default for this option so can not proceed.
+        sys.stderr.write('No "[%s]/%s" option in conf file %s\n' % \
+                    (conf.SECTION, option, conf.configfile))
+        sys.exit(1)
+
+def openmail(widget=None, junk=None):
+    'Open gmail web interface'
+    webbrowser.open(webmail)
+
+class Indicator:
+    'Wrapper to instantiate appropriate Ubuntu Desktop App or Msg indicator'
+
+    class App(object):
+        'Instantiate Ubuntu application menu indicator'
+        def __init__(self, folder):
+            'Constructor'
+            self.ind_type = 'App'
+            self.label = 'Gmail %s' % os.path.basename(folder).title()
+            menu = gtk.Menu()
+            # Add menu option to call up gmail web page
+            self.menuitem = gtk.MenuItem()
+            self.menuitem.connect('activate', openmail)
+            self.menuitem.set_label(self.label)
+            self.menuitem.show()
+            menu.append(self.menuitem)
+
+            # Add menu option to quit
+            def quit(widget): sys.exit(0)
+            menuquit = gtk.MenuItem()
+            menuquit.connect('activate', quit)
+            menuquit.set_label('Quit')
+            menuquit.show()
+            menu.append(menuquit)
+
+            import appindicator
+            self.ind = appindicator.Indicator(PROGNAME,
+                    'indicator-messages', appindicator.CATEGORY_COMMUNICATIONS)
+            self.ind.set_status(appindicator.STATUS_ACTIVE)
+            self.ind.set_attention_icon('indicator-messages-new')
+            self.ind.set_menu(menu)
+            self.ATTENTION = appindicator.STATUS_ATTENTION
+            self.ACTIVE = appindicator.STATUS_ACTIVE
+
+        def set(self, unread):
+            'Set panel indicator count and state'
+            self.ind.set_status(self.ATTENTION if unread > 0 else self.ACTIVE)
+            self.menuitem.set_label('%s (%d unread)' % (self.label, unread))
+
+    class Msg(object):
+        'Instantiate Ubuntu integrated messaging menu indicator'
+        def __init__(self, folder):
+            'Constructor'
+            self.ind_type = 'Msg'
+            self.label = '%s - unread' % os.path.basename(folder).title()
+            import indicate
+            self.ind = indicate.indicate_server_ref_default()
+            self.ind.set_type('message.mail')
+            deskfile = os.path.join(HOMEDIR,
+                    '.local/share/applications/%s.desktop' % PROGNAME)
+            self.ind.set_desktop_file(deskfile)
+            self.ind.connect('server-display', openmail)
+            self.ind.show()
+
+            self.src = indicate.Indicator()
+            self.src.set_property('name', self.label)
+            self.src.connect('user-display', openmail)
+            self.set(0)
+
+        def set(self, unread):
+            'Set panel indicator count and state'
+            self.src.set_property('count', str(unread))
+            self.src.set_property('draw-attention',
+                    'true' if unread > 0 else 'false')
+            self.src.show()
+
+    @staticmethod
+    def create(folder, other):
+        'Set indicator type based on type of desktop (yuk!)'
+        desktop = os.getenv('DESKTOP_SESSION', 'unknown').lower()
+        mtype = 'ubuntu' in desktop or 'gnome-' in desktop
+        if other: mtype = not mtype
+        return Indicator.Msg(folder) if mtype else Indicator.App(folder)
+
+def do_command():
+    'Execute a command (e.g. play sound) on new mail'
+    if command:
+        with open('/dev/null') as f:
+            subprocess.call(command, stdout=f, stdin=f,
+                    stderr=subprocess.STDOUT)
+
+def decode(text):
+    'Decode encoded text'
+    # Paper over any potential decoding error
+    try:
+        text, encoding = header.decode_header(text)[0]
+        if encoding:
+            text = text.decode(encoding, 'replace')
+    except:
+        pass
+
+    return re.sub('[\n\r]', '', text.strip())
+
+def get_from(text):
+    'Return name or address from name/address string'
+    name, addr = utils.parseaddr(text.strip())
+    return decode(name or addr)
+
+def get_subject(text):
+    'Strip and decode email subject'
+    return decode(re.sub('^.*?:', '', text).strip())
+
+def limtext(text, maxl):
+    'Limit text to specified width'
+    if len(text) > maxl:
+        text = text[:(maxl-3)] + ' ..'
+    return text
+
+class checker(threading.Thread):
+    'Thread to connect to imap server and wait/poll for new email'
+
+    def __init__(self):
+        'Init this thread'
+        threading.Thread.__init__(self)
+        self.server = None
+        self.msgs = set() if args.initial else None
+        pynotify.init(PROGNAME)
+
+    def setind(self):
+        'Set panel indicator active if unread email, otherwise inactive'
+        indicator.set(self.unread)
+        return False
+
+    def reset(self, reason):
+        'Reset the connection'
+        if self.server:
+            out('Connection reset, %s' % reason)
+            try:
+                self.server.close_folder()
+                self.server.logout()
+            except:
+                pass
+
+            self.server = None
+
+    def connect(self):
+        'Connect to IMAP server'
+        self.server = IMAPClient(server, ssl=True)
+        self.server.login(username, password)
+        self.server.select_folder(folder, readonly=True)
+        self.connect_time = time.time()
+        out('Connected to %s' % server)
+
+    def check(self):
+        'Check for new messages'
+
+        # Get current list of new messages
+        msgs = self.server.search(['UNSEEN'])
+        new_unread = 0
+        if self.msgs is not None:
+
+            # Build list of new messages we have not already seen
+            newmsgs = [x for x in msgs if x not in self.msgs]
+
+            # Fetch data for these messages
+            if newmsgs:
+                res = self.server.fetch(newmsgs,
+                        ['BODY.PEEK[HEADER.FIELDS (FROM)]',
+                         'BODY.PEEK[HEADER.FIELDS (SUBJECT)]'])
+
+                # Iterate through each of these and output notification
+                # message
+                for m in newmsgs:
+                    if m in res:
+                        hdr = res[m].values()
+                        who = limtext(get_from(hdr[0]), 60)
+                        if who:
+                            subject = limtext(get_subject(hdr[1]), 180)
+                            if not subject:
+                                subject = '<no subject>'
+
+                            new_unread += 1
+                            pynotify.Notification('Mail from ' + who, subject,
+                                    'indicator-messages-new').show()
+
+                # Only run command once for each new set of mail
+                if new_unread > 0:
+                    do_command()
+
+        # Keep record of unread messages for next compare
+        self.msgs = set(msgs)
+
+        # Set count of unread messages and write to indicator
+        self.unread = len(msgs)
+        gobject.idle_add(self.setind)
+        out('There are %d unread, %d new message[s]' % \
+                (self.unread, new_unread))
+
+    def run(self):
+        'Runs in a thread to check the status of inbox'
+        while True:
+            try:
+                # Set up connection if not up
+                if not self.server:
+                    self.connect()
+
+                # Check for new messages
+                self.check()
+
+                # Put connection into IDLE mode and then wait. Wait only
+                # a short period if some unread messages so we catch
+                # them going to read state which gmail IDLE (sadly) does
+                # not otherwise pass on.
+                self.server.idle()
+                self.server.idle_check(timeout=(POLL_FAST if self.unread > 0
+                    else POLL_SLOW))
+
+                # Reset connection if server does not respond correctly
+                if not self.server.idle_done():
+                    self.reset('no IDLE response')
+
+                # Reset connection if up for a long period
+                elif (time.time() - self.connect_time) >= POLL_RECONNECT:
+                    self.reset('time to reconnect')
+            except:
+                # Catch any possible failure and reset the connection
+                out('Exception occurred:\n' + traceback.format_exc().rstrip())
+                self.reset('failure')
+                out('Sleeping %d secs to retry connection ..' % POLL_FAIL)
+                time.sleep(POLL_FAIL)
+
+# Create a system wide lock so this program only runs once
+proglock = open_sys_lock('%s-%s-%s' % (PROGNAME, USER, DISPLAY))
+if not proglock:
+    sys.stderr.write('%s already running %s on this host/%s, terminating ..\n'
+            % (USER, PROGNAME, DISPLAY))
+    sys.exit(-1)
+
+# Process command line options
+opt = argparse.ArgumentParser(description=__doc__.strip())
+opt.add_argument('-u', '--username', help='Mail username')
+opt.add_argument('-p', '--password', help='Mail password')
+opt.add_argument('-f', '--folder',
+        help='Alternate folder to check, rather than "%s"' % FOLDER)
+opt.add_argument('-s', '--server', help='Alternative IMAP server')
+opt.add_argument('-d', '--debug', action='store_true',
+        help='output debug log messages to stdout')
+opt.add_argument('-i', '--initial', action='store_true',
+        help='notify initial state of messages at startup')
+opt.add_argument('-o', '--other_desktop', action='store_true',
+        help='use other X desktop, for testing')
+args = opt.parse_args()
+
+# Read configuration file and get account settings
+username = args.username or conf.get('username')
+password = args.password or conf.get('password')
+server = args.server or conf.get('server', SERVER)
+folder = args.folder or conf.get('folder', FOLDER)
+webmail = conf.get('webmail', WEBMAIL)
+out('User = %s' % username)
+out('Server = %s, folder = "%s"' % (server, folder))
+
+# Set command to execute on new mail
+command_str = conf.get('command', '')
+out('Command = %s' % (command_str if command_str else '<none>'))
+command = [os.path.expanduser(x) for x in command_str.split()]
+del command_str
+
+# Set indicator appropriate for this desktop environment
+indicator = Indicator.create(folder, args.other_desktop)
+out('Using %s indicator' % indicator.ind_type)
+
+# Set off a thread to do the imap check to server
+gtk.gdk.threads_init()
+thd = checker()
+thd.daemon = True
+thd.start()
+
+# Drop into gtk main forever
+gtk.main()

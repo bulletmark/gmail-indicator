@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Terminal=false
+Name=Gmail Indicator
+Icon=applications-email-panel
+Exec=gmail-indicator
+Comment=Application to drive panel icon indicator and output notifications for new Google Mail messages.
