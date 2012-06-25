@@ -6,7 +6,7 @@ emails in your Gmail inbox. Notification messages for new emails are
 also output. Gmail-indicator integrates into the Ubuntu panel integrated
 messaging menu in Unity or GNOME-classic, etc. On Ubuntu GNOME shell,
 gmail-indicator drives an icon in the top panel via a GNOME shell
-extension.
+extension as seen [here](http://github.com/bulletmark/gmail-indicator/wiki).
 
 New mail notifications are pushed immediately from the gmail server
 using IMAP idle.
