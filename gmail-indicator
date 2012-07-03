@@ -21,6 +21,8 @@ from imapclient import IMAPClient
 SERVER = 'imap.gmail.com'
 FOLDER = 'INBOX'
 WEBMAIL = 'http://mail.google.com/'
+ICON_NOMAIL = 'indicator-messages'
+ICON_NEWMAIL = 'indicator-messages-new'
 
 TIMEFMT = '%Y-%m-%d %H:%M.%S'
 
@@ -149,10 +151,10 @@ class Indicator:
             menu.append(menuquit)
 
             import appindicator
-            self.ind = appindicator.Indicator(PROGNAME,
-                    'indicator-messages', appindicator.CATEGORY_COMMUNICATIONS)
+            self.ind = appindicator.Indicator(PROGNAME, ICON_NOMAIL,
+                    appindicator.CATEGORY_COMMUNICATIONS)
             self.ind.set_status(appindicator.STATUS_ACTIVE)
-            self.ind.set_attention_icon('indicator-messages-new')
+            self.ind.set_attention_icon(ICON_NEWMAIL)
             self.ind.set_menu(menu)
             self.ATTENTION = appindicator.STATUS_ATTENTION
             self.ACTIVE = appindicator.STATUS_ACTIVE
@@ -296,7 +298,7 @@ class checker(threading.Thread):
 
                             new_unread += 1
                             pynotify.Notification('Mail from ' + who, subject,
-                                    'indicator-messages-new').show()
+                                    ICON_NEWMAIL).show()
 
                 # Only run command once for each new set of mail
                 if new_unread > 0:
@@ -344,13 +346,6 @@ class checker(threading.Thread):
                 out('Sleeping %d secs to retry connection ..' % POLL_FAIL)
                 time.sleep(POLL_FAIL)
 
-# Create a system wide lock so this program only runs once
-proglock = open_sys_lock('%s-%s-%s' % (PROGNAME, USER, DISPLAY))
-if not proglock:
-    sys.stderr.write('%s already running %s on this host/%s, terminating ..\n'
-            % (USER, PROGNAME, DISPLAY))
-    sys.exit(-1)
-
 # Process command line options
 opt = argparse.ArgumentParser(description=__doc__.strip())
 opt.add_argument('-u', '--username', help='Mail username')
@@ -380,6 +375,13 @@ command_str = conf.get('command', '')
 out('Command = %s' % (command_str if command_str else '<none>'))
 command = [os.path.expanduser(x) for x in command_str.split()]
 del command_str
+
+# Create a system wide lock so this program only runs once
+proglock = open_sys_lock('%s-%s-%s' % (PROGNAME, USER, DISPLAY))
+if not proglock:
+    sys.stderr.write('%s already running %s on this host/%s, terminating ..\n'
+            % (USER, PROGNAME, DISPLAY))
+    sys.exit(-1)
 
 # Set indicator appropriate for this desktop environment
 indicator = Indicator.create(folder, args.other_desktop)
