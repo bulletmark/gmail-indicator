@@ -132,7 +132,7 @@ class Indicator:
         'Instantiate Ubuntu application menu indicator'
         def __init__(self, folder):
             'Constructor'
-            self.ind_type = 'App'
+            self.ind_type = self.__class__.__name__
             self.label = 'Gmail %s' % os.path.basename(folder).title()
             menu = gtk.Menu()
             # Add menu option to call up gmail web page
@@ -168,7 +168,7 @@ class Indicator:
         'Instantiate Ubuntu integrated messaging menu indicator'
         def __init__(self, folder):
             'Constructor'
-            self.ind_type = 'Msg'
+            self.ind_type = self.__class__.__name__
             self.label = '%s - unread' % os.path.basename(folder).title()
             import indicate
             self.ind = indicate.indicate_server_ref_default()
@@ -194,10 +194,15 @@ class Indicator:
     @staticmethod
     def create(folder, other):
         'Set indicator type based on type of desktop (yuk!)'
+
+        # List of desktops which use Ubuntu msg indicator. Others use
+        # app indicator.
+        msg_desktops = ('ubuntu', 'gnome-')
+
         desktop = os.getenv('DESKTOP_SESSION', 'unknown').lower()
-        mtype = 'ubuntu' in desktop or 'gnome-' in desktop
-        if other: mtype = not mtype
-        return Indicator.Msg(folder) if mtype else Indicator.App(folder)
+        msgtype = any([d for d in msg_desktops if d in desktop])
+        if other: msgtype = not msgtype
+        return Indicator.Msg(folder) if msgtype else Indicator.App(folder)
 
 def do_command():
     'Execute a command (e.g. play sound) on new mail'
