@@ -13,7 +13,7 @@ using IMAP idle.
 
 ### INSTALLATION ON UBUNTU LINUX
 
-Make sure IMAP access is enabled in the settings on your gmail account.
+Make sure IMAP access is enabled in the settings on your gmail account. Then do:
 
     sudo pip install imapclient  # or sudo easy_install imapclient
     git clone http://github.com/bulletmark/gmail-indicator
@@ -26,7 +26,7 @@ change the *command* option there to something that works on your system
 if you want an audible sound on new emails. Test that command manually
 first. Disable, i.e. comment out, the *command* option if you don't want
 new email sound. You can also use the *folder* command to check another
-label/folder, e.g, "[Gmail]/Important", rather than the default "INBOX".
+label/folder, e.g, *[Gmail]/Important*, rather than the default *INBOX*.
 
 Log out and back in to your Ubuntu or GNOME shell session to
 complete installation. If using GNOME shell, ensure the gmail-indicator
