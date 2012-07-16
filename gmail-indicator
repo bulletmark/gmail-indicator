@@ -26,12 +26,13 @@ ICON_NEWMAIL = 'indicator-messages-new'
 
 TIMEFMT = '%Y-%m-%d %H:%M.%S'
 
-# Poll rates in secs. Note we use IMAP IDLE so most new emails are
-# "pushed" from server. These times are for failure/integrity polling.
+# Poll rates in secs. Note we use IMAP IDLE so new emails are
+# "pushed" from server. (Most of) the following times are for
+# connection failure/integrity polling.
 POLL_FAIL = 30
-POLL_FAST = 60
-POLL_SLOW = 300
-POLL_RECONNECT = 1800
+POLL_UNREAD = 60
+POLL_READ = 300
+POLL_RECONNECT = 3600
 
 # User and home dir etc
 USER = getpass.getuser()
@@ -277,7 +278,7 @@ class checker(threading.Thread):
         'Check for new messages'
 
         # Get current list of new messages
-        msgs = self.server.search(['UNSEEN'])
+        msgs = self.server.search('UNSEEN')
         new_unread = 0
         if self.msgs is not None:
 
@@ -334,11 +335,12 @@ class checker(threading.Thread):
                 # them going to read state which gmail IDLE (sadly) does
                 # not otherwise pass on.
                 self.server.idle()
-                self.server.idle_check(timeout=(POLL_FAST if self.unread > 0
-                    else POLL_SLOW))
+                self.server.idle_check(timeout=(POLL_UNREAD if
+                    self.unread > 0 else POLL_READ))
 
                 # Reset connection if server does not respond correctly
-                if not self.server.idle_done():
+                text, resp = self.server.idle_done()
+                if not text:
                     self.reset('no IDLE response')
 
                 # Reset connection if up for a long period
