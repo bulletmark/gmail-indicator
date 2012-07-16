@@ -15,8 +15,9 @@ command = /usr/bin/aplay /usr/share/sounds/purple/receive.wav
 #command = /usr/bin/play -v3 /usr/share/sounds/KDE-Im-New-Mail.ogg
 
 # Optional imap server, defaults to gmail but can try other servers that
-# support IMAP idle.
+# support IMAP idle. Can also specify alternative ssl port.
 #server = imap.gmail.com
+#port = n
 
 # Optional folder, defaults to "INBOX"
 #folder = INBOX

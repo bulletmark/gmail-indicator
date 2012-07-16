@@ -268,7 +268,7 @@ class checker(threading.Thread):
 
     def connect(self):
         'Connect to IMAP server'
-        self.server = IMAPClient(server, ssl=True)
+        self.server = IMAPClient(server, port=port, ssl=True)
         self.server.login(username, password)
         self.server.select_folder(folder, readonly=True)
         self.connect_time = time.time()
@@ -360,6 +360,7 @@ opt.add_argument('-p', '--password', help='Mail password')
 opt.add_argument('-f', '--folder',
         help='Alternate folder to check, rather than "%s"' % FOLDER)
 opt.add_argument('-s', '--server', help='Alternative IMAP server')
+opt.add_argument('-P', '--port', help='Alternative IMAP port')
 opt.add_argument('-d', '--debug', action='store_true',
         help='output debug log messages to stdout')
 opt.add_argument('-i', '--initial', action='store_true',
@@ -372,17 +373,19 @@ args = opt.parse_args()
 username = args.username or conf.get('username')
 password = args.password or conf.get('password')
 server = args.server or conf.get('server', SERVER)
+port = args.port or conf.get('port', '') or None
 folder = args.folder or conf.get('folder', FOLDER)
 webmail = conf.get('webmail', WEBMAIL)
 
-# User may override poll times, e.g. for testing
+# User may override poll times in conf file, e.g. for testing
 poll_fail = conf.get('poll_fail', POLL_FAIL)
 poll_unread = conf.get('poll_unread', POLL_UNREAD)
 poll_read = conf.get('poll_read', POLL_READ)
 poll_reconnect = conf.get('poll_reconnect', POLL_RECONNECT)
 
 out('User = %s' % username)
-out('Server = %s, folder = "%s"' % (server, folder))
+out('Server = %s%s, folder = "%s"' % (server, (':' + str(port)) if port
+    else '', folder))
 out('Rates = %d/%d/%d/%d' % (poll_fail, poll_unread, poll_read, poll_reconnect))
 
 # Set command to execute on new mail
