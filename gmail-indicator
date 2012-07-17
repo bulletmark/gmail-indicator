@@ -247,7 +247,8 @@ class checker(threading.Thread):
         threading.Thread.__init__(self)
         self.server = None
         self.msgs = set() if args.initial else None
-        pynotify.init(PROGNAME)
+        if notify:
+            pynotify.init(PROGNAME)
 
     def setind(self):
         'Set panel indicator active if unread email, otherwise inactive'
@@ -303,8 +304,9 @@ class checker(threading.Thread):
                                 subject = '<no subject>'
 
                             new_unread += 1
-                            pynotify.Notification('Mail from ' + who, subject,
-                                    ICON_NEWMAIL).show()
+                            if notify:
+                                pynotify.Notification('Mail from ' + who,
+                                        subject, ICON_NEWMAIL).show()
 
                 # Only run command once for each new set of mail
                 if new_unread > 0:
@@ -365,8 +367,10 @@ opt.add_argument('-d', '--debug', action='store_true',
         help='output debug log messages to stdout')
 opt.add_argument('-i', '--initial', action='store_true',
         help='notify initial state of messages at startup')
+opt.add_argument('-n', '--no-notify', action='store_true',
+        help='suppress new mail notification messages')
 opt.add_argument('-o', '--other_desktop', action='store_true',
-        help='use other X desktop, for testing')
+        help='use other desktop App|Msg indication, for testing')
 args = opt.parse_args()
 
 # Read configuration file and get account settings
@@ -376,12 +380,14 @@ server = args.server or conf.get('server', SERVER)
 port = args.port or conf.get('port', '') or None
 folder = args.folder or conf.get('folder', FOLDER)
 webmail = conf.get('webmail', WEBMAIL)
+notify = False if args.no_notify else (conf.get('notify', 'true').lower()
+        not in ('false', 'no', 'disable'))
 
 # User may override poll times in conf file, e.g. for testing
-poll_fail = conf.get('poll_fail', POLL_FAIL)
-poll_unread = conf.get('poll_unread', POLL_UNREAD)
-poll_read = conf.get('poll_read', POLL_READ)
-poll_reconnect = conf.get('poll_reconnect', POLL_RECONNECT)
+poll_fail = int(conf.get('poll_fail', POLL_FAIL))
+poll_unread = int(conf.get('poll_unread', POLL_UNREAD))
+poll_read = int(conf.get('poll_read', POLL_READ))
+poll_reconnect = int(conf.get('poll_reconnect', POLL_RECONNECT))
 
 out('User = %s' % username)
 out('Server = %s%s, folder = "%s"' % (server, (':' + str(port)) if port

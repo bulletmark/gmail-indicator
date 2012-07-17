@@ -25,3 +25,6 @@ command = /usr/bin/aplay /usr/share/sounds/purple/receive.wav
 
 # Optional web mail page to open, defaults to gmail default web page
 #webmail = http://mail.google.com/
+
+# Optionally suppress new mail notification messages
+#notify = false
