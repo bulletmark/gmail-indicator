@@ -15,7 +15,7 @@ using IMAP idle.
 
 Make sure IMAP access is enabled in the settings on your gmail account. Then do:
 
-    sudo pip install imapclient  # or sudo easy_install imapclient
+    sudo easy_install install imapclient  # or sudo pip imapclient
     git clone http://github.com/bulletmark/gmail-indicator
     cd gmail-indicator
 
