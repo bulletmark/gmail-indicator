@@ -209,8 +209,11 @@ def do_command():
     'Execute a command (e.g. play sound) on new mail'
     if command:
         with open('/dev/null') as f:
-            subprocess.call(command, stdout=f, stdin=f,
-                    stderr=subprocess.STDOUT)
+            try:
+                subprocess.call(command, stdout=f, stdin=f,
+                        stderr=subprocess.STDOUT)
+            except Exception, e:
+                out('Failed to run command:\n' + str(e))
 
 def decode(text):
     'Decode encoded text'
