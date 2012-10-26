@@ -8,7 +8,7 @@ panel indicator icon on new mail.
 
 # Standard python modules
 import os, sys, argparse, re, ConfigParser, threading, datetime
-import time, subprocess, webbrowser, fcntl, getpass, traceback
+import time, subprocess, webbrowser, fcntl, getpass, traceback, platform
 from email import utils, header
 
 # Debian/Ubuntu packaged 3rd party
@@ -171,6 +171,7 @@ class Indicator:
             'Constructor'
             self.ind_type = self.__class__.__name__
             self.label = '%s - unread' % os.path.basename(folder).title()
+            import indicate
             self.ind = indicate.indicate_server_ref_default()
             self.ind.set_type('message.mail')
             deskfile = os.path.join(HOMEDIR,
@@ -203,9 +204,7 @@ class Indicator:
         msgtype = any([d for d in msg_desktops if d in desktop])
         if other: msgtype = not msgtype
         if msgtype:
-            try:
-                import indicate
-            except:
+            if platform.linux_distribution()[1] >= '12.10':
                 msgtype = False
 
         return Indicator.Msg(folder) if msgtype else Indicator.App(folder)
