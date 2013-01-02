@@ -1,7 +1,0 @@
-{
-    "shell-version": ["3.2", "3.4"],
-    "uuid": "gmail-indicator.github.com",
-    "url": "http://github.com/bulletmark/gmail-indicator",
-    "name": "Gmail Indicator",
-    "description": "Gmail new mail panel icon indicator and notifier"
-}

@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 '''
 Program which monitors gmail inbox to output notification messages and set
 panel indicator icon on new mail.
@@ -11,8 +11,8 @@ import os, sys, argparse, re, ConfigParser, threading, datetime
 import time, subprocess, webbrowser, fcntl, getpass, traceback, platform
 from email import utils, header
 
-# Debian/Ubuntu packaged 3rd party
-import gtk, gobject, pynotify
+from gi.repository import Gtk, GObject
+from gi.repository import Notify
 
 # External 3rd party (PyPi)
 # Install with "pip install module"
@@ -57,7 +57,6 @@ out.lock = None
 
 def open_sys_lock(name):
     'Create a system wide program lock'
-
     # We use exclusive assess to a file for this
     fp = open(os.path.join('/tmp', name + '.lock'), 'w')
     try:
@@ -69,7 +68,6 @@ def open_sys_lock(name):
 
 class conf:
     'Small wrapper to manage conf file'
-
     # Name of section in our ~/.conf file
     SECTION = 'default'
 
@@ -124,6 +122,10 @@ class conf:
 
 def openmail(widget=None, junk=None):
     'Open gmail web interface'
+    # Refresh the indicator because the Ubuntu messaging menu clears it
+    # on activation.
+    indicator.set()
+
     webbrowser.open(webmail)
 
 class Indicator:
@@ -131,13 +133,13 @@ class Indicator:
 
     class App(object):
         'Instantiate Ubuntu application menu indicator'
-        def __init__(self, folder):
+        def __init__(self, label):
             'Constructor'
             self.ind_type = self.__class__.__name__
-            self.label = 'Gmail %s' % os.path.basename(folder).title()
-            menu = gtk.Menu()
+            self.label = 'Gmail ' + label
+            menu = Gtk.Menu()
             # Add menu option to call up gmail web page
-            self.menuitem = gtk.MenuItem()
+            self.menuitem = Gtk.MenuItem()
             self.menuitem.connect('activate', openmail)
             self.menuitem.set_label(self.label)
             self.menuitem.show()
@@ -145,56 +147,67 @@ class Indicator:
 
             # Add menu option to quit
             def quit(widget): sys.exit(0)
-            menuquit = gtk.MenuItem()
+            menuquit = Gtk.MenuItem()
             menuquit.connect('activate', quit)
             menuquit.set_label('Quit')
             menuquit.show()
             menu.append(menuquit)
 
-            import appindicator
-            self.ind = appindicator.Indicator(PROGNAME, ICON_NOMAIL,
-                    appindicator.CATEGORY_COMMUNICATIONS)
-            self.ind.set_status(appindicator.STATUS_ACTIVE)
+            from gi.repository import AppIndicator3 as appindicator
+            self.ATTENTION = appindicator.IndicatorStatus.ATTENTION
+            self.ACTIVE = appindicator.IndicatorStatus.ACTIVE
+            self.ind = appindicator.Indicator.new(PROGNAME, ICON_NOMAIL,
+                    appindicator.IndicatorCategory.COMMUNICATIONS)
+            self.ind.set_status(self.ACTIVE)
             self.ind.set_attention_icon(ICON_NEWMAIL)
             self.ind.set_menu(menu)
-            self.ATTENTION = appindicator.STATUS_ATTENTION
-            self.ACTIVE = appindicator.STATUS_ACTIVE
 
-        def set(self, unread):
+        def set(self, unread=-1):
             'Set panel indicator count and state'
-            self.ind.set_status(self.ATTENTION if unread > 0 else self.ACTIVE)
-            self.menuitem.set_label('%s (%d unread)' % (self.label, unread))
+
+            if unread >= 0:
+                self.ind.set_status(self.ATTENTION if unread > 0 else
+                        self.ACTIVE)
+                self.menuitem.set_label('%s (%d unread)' % (self.label, unread))
 
     class Msg(object):
-        'Instantiate Ubuntu integrated messaging menu indicator'
-        def __init__(self, folder):
+        'Instantiate Ubuntu messaging menu indicator'
+        def __init__(self, label):
             'Constructor'
             self.ind_type = self.__class__.__name__
-            self.label = '%s - unread' % os.path.basename(folder).title()
-            import indicate
-            self.ind = indicate.indicate_server_ref_default()
-            self.ind.set_type('message.mail')
-            deskfile = os.path.join(HOMEDIR,
-                    '.local/share/applications/%s.desktop' % PROGNAME)
-            self.ind.set_desktop_file(deskfile)
-            self.ind.connect('server-display', openmail)
-            self.ind.show()
+            self.label = label
 
-            self.src = indicate.Indicator()
-            self.src.set_property('name', self.label)
-            self.src.connect('user-display', openmail)
+            from gi.repository import MessagingMenu
+            self.ind = MessagingMenu.App(desktop_id=(PROGNAME + '.desktop'))
+            self.ind.register()
             self.set(0)
+            self.ind.connect('activate-source', openmail)
 
-        def set(self, unread):
+        def set(self, unread=-1):
             'Set panel indicator count and state'
-            self.src.set_property('count', str(unread))
-            self.src.set_property('draw-attention',
-                    'true' if unread > 0 else 'false')
-            self.src.show()
+
+            # If just a refresh then use last stored unread count
+            if unread < 0:
+                unread = self.unread
+            else:
+                self.unread = unread
+
+            if unread > 0:
+                if not self.ind.has_source('inbox'):
+                    self.ind.append_source_with_count('inbox', None,
+                            self.label, unread)
+                else:
+                    self.ind.set_source_count('inbox', unread)
+
+                self.ind.draw_attention('inbox')
+            elif self.ind.has_source('inbox'):
+                #self.ind.remove_attention('inbox')
+                self.ind.remove_source('inbox')
 
     @staticmethod
     def create(folder, other):
         'Set indicator type based on type of desktop (yuk!)'
+        label = os.path.basename(folder).title()
 
         # List of desktops which use Ubuntu msg indicator. Others use
         # app indicator.
@@ -203,11 +216,7 @@ class Indicator:
         desktop = os.getenv('DESKTOP_SESSION', 'unknown').lower()
         msgtype = any([d for d in msg_desktops if d in desktop])
         if other: msgtype = not msgtype
-        if msgtype:
-            if platform.linux_distribution()[1] >= '12.10':
-                msgtype = False
-
-        return Indicator.Msg(folder) if msgtype else Indicator.App(folder)
+        return Indicator.Msg(label) if msgtype else Indicator.App(label)
 
 def do_command():
     'Execute a command (e.g. play sound) on new mail'
@@ -255,12 +264,7 @@ class checker(threading.Thread):
         self.server = None
         self.msgs = set() if args.initial else None
         if notify:
-            pynotify.init(PROGNAME)
-
-    def setind(self):
-        'Set panel indicator active if unread email, otherwise inactive'
-        indicator.set(self.unread)
-        return False
+            Notify.init(PROGNAME)
 
     def reset(self, reason):
         'Reset the connection'
@@ -312,7 +316,7 @@ class checker(threading.Thread):
 
                             new_unread += 1
                             if notify:
-                                pynotify.Notification('Mail from ' + who,
+                                Notify.Notification.new('Mail from ' + who,
                                         subject, ICON_NEWMAIL).show()
 
                 # Only run command once for each new set of mail
@@ -324,7 +328,7 @@ class checker(threading.Thread):
 
         # Set count of unread messages and write to indicator
         self.unread = len(msgs)
-        gobject.idle_add(self.setind)
+        GObject.idle_add(indicator.set, self.unread)
         out('There are %d unread, %d new message[s]' % \
                 (self.unread, new_unread))
 
@@ -419,10 +423,10 @@ indicator = Indicator.create(folder, args.other_desktop)
 out('Using %s indicator' % indicator.ind_type)
 
 # Set off a thread to do the imap check to server
-gtk.gdk.threads_init()
+GObject.threads_init()
 thd = checker()
 thd.daemon = True
 thd.start()
 
 # Drop into gtk main forever
-gtk.main()
+Gtk.main()
