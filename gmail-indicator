@@ -100,7 +100,7 @@ class conf:
             conf._init()
 
         if conf.parser and conf.parser.has_option(conf.SECTION, option):
-            return conf.parser.get(conf.SECTION, option).strip()
+            return conf.parser.get(conf.SECTION, option, raw=True).strip()
 
         return None
 
