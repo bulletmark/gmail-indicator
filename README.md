@@ -38,10 +38,6 @@ shell dash. It will start automatically at log in and run in the
 background checking for new mail. On Ubuntu, you can also start
 gmail-indicator from the Ubuntu messaging menu.
 
-NOTE: The gmail-indicator mail icon can be placed on the GNOME shell top
-panel by using the superb [AppIndicator Support](https://extensions.gnome.org/extension/615/appindicator-support/)
-GNOME Shell extension.
-
 ### REMOVAL
 
     cd gmail-indicator  # Source dir, as above
