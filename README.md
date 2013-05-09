@@ -38,6 +38,10 @@ shell dash. It will start automatically at log in and run in the
 background checking for new mail. On Ubuntu, you can also start
 gmail-indicator from the Ubuntu messaging menu.
 
+NOTE: The gmail-indicator mail icon can be placed on the GNOME shell top
+panel by using the superb [AppIndicator Support](https://extensions.gnome.org/extension/615/appindicator-support/)
+GNOME Shell extension.
+
 ### REMOVAL
 
     cd gmail-indicator  # Source dir, as above
@@ -57,7 +61,7 @@ complete installation.
 
 ### LICENSE
 
-Copyright (C) 2012 Mark Blakeney. This program is distributed under the
+Copyright (C) 2013 Mark Blakeney. This program is distributed under the
 terms of the GNU General Public License.
 This program is free software: you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the

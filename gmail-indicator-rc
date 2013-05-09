@@ -21,6 +21,7 @@ command = /usr/bin/aplay /usr/share/sounds/purple/receive.wav
 
 # Optional folder, defaults to "INBOX"
 #folder = INBOX
+# Or, use this for gmail "priority inbox"
 #folder = [Gmail]/Important
 
 # Optional web mail page to open, defaults to gmail default web page

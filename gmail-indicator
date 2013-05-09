@@ -4,7 +4,7 @@ Program which monitors gmail inbox to output notification messages and set
 panel indicator icon on new mail.
 '''
 
-# (C) Mark Blakeney, markb@berlios.de, May 2012.
+# (C) Mark Blakeney, markb@berlios.de, May 2013.
 
 # Standard python modules
 import os, sys, argparse, re, ConfigParser, threading, datetime
