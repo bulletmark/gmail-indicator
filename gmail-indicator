@@ -66,7 +66,7 @@ def open_sys_lock(name):
 
     return fp
 
-class conf:
+class conf(object):
     'Small wrapper to manage conf file'
     # Name of section in our ~/.conf file
     SECTION = 'default'
@@ -128,49 +128,54 @@ def openmail(widget=None, junk=None):
 
     webbrowser.open(webmail)
 
-class Indicator:
+class Indicator(object):
     'Wrapper to instantiate appropriate Ubuntu Desktop App or Msg indicator'
 
-    class App(object):
-        'Instantiate Ubuntu application menu indicator'
+    class GnomeApp(object):
+        'Instantiate Gnome status icon'
         def __init__(self, label):
             'Constructor'
             self.ind_type = self.__class__.__name__
             self.label = 'Gmail ' + label
-            menu = Gtk.Menu()
+
+            # Create GTK menu
+            self.menu = Gtk.Menu()
+
             # Add menu option to call up gmail web page
-            self.menuitem = Gtk.MenuItem()
-            self.menuitem.connect('activate', openmail)
-            self.menuitem.set_label(self.label)
-            self.menuitem.show()
-            menu.append(self.menuitem)
+            self.menuactv = Gtk.MenuItem(label)
+            self.menuactv.connect('activate', openmail)
+            self.menu.append(self.menuactv)
 
             # Add menu option to quit
-            def quit(widget): sys.exit(0)
-            menuquit = Gtk.MenuItem()
-            menuquit.connect('activate', quit)
-            menuquit.set_label('Quit')
-            menuquit.show()
-            menu.append(menuquit)
+            menuquit = Gtk.MenuItem('Quit')
+            menuquit.connect('activate', Gtk.main_quit)
+            self.menu.append(menuquit)
 
-            from gi.repository import AppIndicator3 as appindicator
-            self.ATTENTION = appindicator.IndicatorStatus.ATTENTION
-            self.ACTIVE = appindicator.IndicatorStatus.ACTIVE
-            self.ind = appindicator.Indicator.new(PROGNAME, ICON_NOMAIL,
-                    appindicator.IndicatorCategory.COMMUNICATIONS)
-            self.ind.set_status(self.ACTIVE)
-            self.ind.set_attention_icon(ICON_NEWMAIL)
-            self.ind.set_menu(menu)
+            self.ind = Gtk.StatusIcon()
+            self.ind.set_title(PROGNAME)
+            self.ind.connect('activate', openmail)
+            self.ind.connect('popup-menu', self._showmenu)
+            self.set()
 
         def set(self, unread=-1):
             'Set panel indicator count and state'
-
             if unread >= 0:
-                self.ind.set_status(self.ATTENTION if unread > 0 else
-                        self.ACTIVE)
-                self.menuitem.set_label('%s (%d unread)' % (self.label, unread))
+                txt = '%s (%d unread)' % (self.label, unread)
+                self.ind.set_tooltip_text(txt)
+                self.menuactv.set_label(txt)
 
-    class Msg(object):
+            if unread > 0:
+                self.ind.set_from_icon_name('mail-unread')
+            else:
+                self.ind.set_from_icon_name('mail-read')
+
+        def _showmenu(self, icon, button, time):
+            'Show pop to quit etc'
+            self.menu.show_all()
+            self.menu.popup(None, None, Gtk.StatusIcon.position_menu,
+                    icon, button, time)
+
+    class UbuntuApp(object):
         'Instantiate Ubuntu messaging menu indicator'
         def __init__(self, label):
             'Constructor'
@@ -201,22 +206,16 @@ class Indicator:
 
                 self.ind.draw_attention('inbox')
             elif self.ind.has_source('inbox'):
-                #self.ind.remove_attention('inbox')
                 self.ind.remove_source('inbox')
 
     @staticmethod
-    def create(folder, other):
-        'Set indicator type based on type of desktop (yuk!)'
+    def create(folder):
+        'Set indicator type based on type of desktop (blame Canonical!)'
         label = os.path.basename(folder).title()
+        desktop = os.getenv('DESKTOP_SESSION', '').lower()
 
-        # List of desktops which use Ubuntu msg indicator. Others use
-        # app indicator.
-        msg_desktops = ('ubuntu', 'gnome-')
-
-        desktop = os.getenv('DESKTOP_SESSION', 'unknown').lower()
-        msgtype = any([d for d in msg_desktops if d in desktop])
-        if other: msgtype = not msgtype
-        return Indicator.Msg(label) if msgtype else Indicator.App(label)
+        return Indicator.UbuntuApp(label) if 'ubuntu' in desktop else \
+                Indicator.GnomeApp(label)
 
 def do_command():
     'Execute a command (e.g. play sound) on new mail'
@@ -380,8 +379,6 @@ opt.add_argument('-i', '--initial', action='store_true',
         help='notify initial state of messages at startup')
 opt.add_argument('-n', '--no-notify', action='store_true',
         help='suppress new mail notification messages')
-opt.add_argument('-o', '--other_desktop', action='store_true',
-        help='use other desktop App|Msg indication, for testing')
 args = opt.parse_args()
 
 # Read configuration file and get account settings
@@ -403,7 +400,8 @@ poll_reconnect = int(conf.get('poll_reconnect', POLL_RECONNECT))
 out('User = %s' % username)
 out('Server = %s%s, folder = "%s"' % (server, (':' + str(port)) if port
     else '', folder))
-out('Rates = %d/%d/%d/%d' % (poll_fail, poll_unread, poll_read, poll_reconnect))
+out('Rates = fail:%d, unread:%d, read:%d, reconnect:%d' % (poll_fail,
+    poll_unread, poll_read, poll_reconnect))
 
 # Set command to execute on new mail
 command_str = conf.get('command', '')
@@ -419,7 +417,7 @@ if not proglock:
     sys.exit(-1)
 
 # Set indicator appropriate for this desktop environment
-indicator = Indicator.create(folder, args.other_desktop)
+indicator = Indicator.create(folder)
 out('Using %s indicator' % indicator.ind_type)
 
 # Set off a thread to do the imap check to server
