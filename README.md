@@ -1,11 +1,11 @@
-## GMAIL-INDICATOR FOR GNOME AND UBUNTU LINUX
+### GMAIL-INDICATOR
 
 Gmail-indicator is a small and efficient background utility for GNOME or
-Ubuntu which highlights a panel icon with a count of unread emails in
-your Gmail inbox. Notification messages for new emails are also output.
-Gmail-indicator integrates into the Ubuntu panel messaging menu in Unity
-or GNOME-classic, etc. On GNOME 3, gmail-indicator drives an icon in the
-panel.
+Ubuntu Linux which highlights a panel icon with a count of unread emails
+in your Gmail inbox. Notification messages for new emails are also
+output. Gmail-indicator integrates into the Ubuntu panel messaging menu
+in Unity or GNOME-classic, etc. On GNOME 3, gmail-indicator drives an
+icon in the panel.
 
 New mail notifications are pushed immediately from the gmail server
 using IMAP idle.
