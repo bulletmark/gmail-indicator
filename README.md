@@ -10,7 +10,7 @@ icon in the panel.
 New mail notifications are pushed immediately from the gmail server
 using IMAP idle.
 
-### INSTALLATION ON UBUNTU LINUX
+### INSTALLATION
 
 Make sure IMAP access is enabled in the settings on your gmail account.
 Then do:
