@@ -11,6 +11,9 @@ import os, sys, argparse, re, ConfigParser, threading, datetime
 import time, subprocess, webbrowser, fcntl, getpass, traceback, platform
 from email import utils, header
 
+import gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('Notify', '0.7')
 from gi.repository import Gtk, GObject
 from gi.repository import Notify
 

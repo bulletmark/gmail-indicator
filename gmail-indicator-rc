@@ -8,7 +8,10 @@ password = your_gmail_password
 
 # Command executed on receipt of new email, e.g. to play a sound.
 # Can be commented out to disable sound.
-command = /usr/bin/aplay /usr/share/sounds/purple/receive.wav
+command = /usr/bin/play /usr/share/sounds/purple/receive.wav
+
+# Or:
+#command = /usr/bin/paplay /usr/share/sounds/purple/receive.wav
 
 # Following gives volume control, better sounds etc. But needs sox
 # installed.
