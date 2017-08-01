@@ -1,6 +1,6 @@
 #!/bin/bash
 # Installation script.
-# (C) Mark Blakeney, markb@berlios.de, May 2013.
+# (C) Mark Blakeney, May 2013.
 
 PROG="gmail-indicator"
 BINDIR="$HOME/bin"
